@@ -39,47 +39,47 @@ def readProtoFile(filename):
     return splited_list
 
 
-def rpc_dict(filename):
+def rpcDict(filename):
     with open(f"{filename}.proto", 'r') as r:
-    rpc_dict = {
-        "func": "",
-        "stream_req": False,
-        "req_message_name": "",
-        "req_message_param": [],
-        "stream_res": False,
-        "res_message_name": "",
-        "res_message_param": []
-    }
-    file_text = r.read()
-    without_comments_text = re.sub(r'//.*\n', '', file_text)
-    rpc_text = re.findall('rpc .*?\{.*?\}?', file_text, re.S)
-    
-    for sentence in rpc_text:
-        sentence = sentence.split(" ")
-        rpc_dict["func"] = sentence[1]
-        rpc_dict["req_message_name"] = sentence[2]
-        rpc_dict["res_message_name"] = sentence[4]
-    
-    message_text = re.findall('message .*?\{.*?\}', without_comments_text, re.S)
-    for sentence in message_text:
-        message_text = sentence.replace("\n", '').split("{")
-        messageBody = re.findall('\S+', message_text[0].strip())[-1]
-        message_text = re.findall('\S+', message_text[1].strip())
-        for i in range(len(message_text)):
-            if rpc_dict.get("req_message_name") == message_text[1]:
-                if message_text[i] == "=":
-                    rpc_dict["req_message_param"].append(message_text[i-1])
-            elif rpc_dict.get("res_message_name") == message_text[1]:
-                if message_text[i] == "=":
-                    rpc_dict["res_message_param"].append(message_text[i-1])
-            else:
-                pass
-    return rpc_dict
+        rpc_dict = {
+            "func": "",
+            "stream_req": False,
+            "req_message_name": "",
+            "req_message_param": [],
+            "stream_res": False,
+            "res_message_name": "",
+            "res_message_param": []
+        }
+        file_text = r.read()
+        without_comments_text = re.sub(r'//.*\n', '', file_text)
+        rpc_text = re.findall('rpc .*?\{.*?\}?', file_text, re.S)
+        
+        for sentence in rpc_text:
+            sentence = sentence.split(" ")
+            rpc_dict["func"] = sentence[1]
+            rpc_dict["req_message_name"] = sentence[2]
+            rpc_dict["res_message_name"] = sentence[4]
+        
+        message_text = re.findall('message .*?\{.*?\}', without_comments_text, re.S)
+        for sentence in message_text:
+            message_text = sentence.replace("\n", '').split("{")
+            messageBody = re.findall('\S+', message_text[0].strip())[-1]
+            message_text = re.findall('\S+', message_text[1].strip())
+            for i in range(len(message_text)):
+                if rpc_dict.get("req_message_name") == message_text[1]:
+                    if message_text[i] == "=":
+                        rpc_dict["req_message_param"].append(message_text[i-1])
+                elif rpc_dict.get("res_message_name") == message_text[1]:
+                    if message_text[i] == "=":
+                        rpc_dict["res_message_param"].append(message_text[i-1])
+                else:
+                    pass
+        return rpc_dict
 
 def createServerTemplate(filename):
     import_pb2_file = f"{ filename }_pb2"
     splited_list_file = readProtoFile(filename)
-    rpc_dict = rpc_dict(filename)
+    rpc_dict = rpcDict(filename)
     response_dict = {i:"" for i in rpc_dict["res_message_param"]}
     request_dict = {i:"" for i in rpc_dict["req_message_param"]}
 
@@ -118,15 +118,17 @@ def createServerTemplate(filename):
         filename=filename, 
         service=pb2_file_obj.DESCRIPTOR.services_by_name.keys()[0], 
         rpc_list=splited_list_file,
-        response_dict=**response_dict)
-    
+        response_dict=response_dict.keys())
+    print(server_template)
+
+
     with open("server.py", "w") as f:
         f.write(server_template)
 
-def createClientTemplate():
+def createClientTemplate(filename):
     import_pb2_file = f"{ filename }_pb2"
     splited_list_file = readProtoFile(filename)
-    rpc_dict = rpc_dict(filename)
+    rpc_dict = rpcDict(filename)
     response_dict = {i:"" for i in rpc_dict["res_message_param"]}
     request_dict = {i:"" for i in rpc_dict["req_message_param"]}
 
@@ -148,10 +150,11 @@ def createClientTemplate():
         with grpc.insecure_channel('localhost:50051') as channel:
             stub = {{ filename }}_pb2_grpc.{{ service }}Stub(channel)
             {% for item in rpc_list %}
-            response = stub.{{ item[4] }}({{ filename }}_pb2.HelloRequest(name='your'))
+            response = stub.{{ item[1] }}({{ filename }}_pb2.{{ item[4] }}({{ request_dict }}))
             {% endfor %}
-        
-        print("{{ service }} client received1: " + response1.message)
+        {% for item in request_dict_param %}
+        print("{{ service }} client received: " + response.{{ item }})
+        {% endfor %}
 
 
     if __name__ == '__main__':
@@ -164,7 +167,10 @@ def createClientTemplate():
         filename=filename, 
         service=pb2_file_obj.DESCRIPTOR.services_by_name.keys()[0], 
         rpc_list=splited_list_file,
-        response_dict=**request_dict)
+        request_dict=request_dict,
+        request_dict_param=request_dict)
+
+    print(client_template)
     
     with open("client.py", "w") as f:
         f.write(client_template)
