@@ -148,7 +148,7 @@ def createClientTemplate():
         with grpc.insecure_channel('localhost:50051') as channel:
             stub = {{ filename }}_pb2_grpc.{{ service }}Stub(channel)
             {% for item in rpc_list %}
-            response = stub.SayHello({{ filename }}_pb2.HelloRequest(name='your'))
+            response = stub.{{ item[4] }}({{ filename }}_pb2.HelloRequest(name='your'))
             {% endfor %}
         
         print("{{ service }} client received1: " + response1.message)
@@ -176,4 +176,5 @@ if __name__ == "__main__":
     createTemplateFiles(proto_file_name)
     proto_file_name_without_extension, ext = os.path.splitext(proto_file_name)
     createServerTemplate(proto_file_name_without_extension)
+    createClientTemplate(proto_file_name_without_extension)
     
